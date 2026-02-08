@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>D3 Collapsible Tree</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  body {
+    margin: 0;
+    background: #f6f7fb;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  }
+  .wrap {
+    padding: 16px 18px;
+  }
+  .title {
+    font-size: 18px;
+    font-weight: 650;
+    margin: 0 0 8px 0;
+  }
+  .subtitle {
+    margin: 0 0 14px 0;
+    color: #444;
+    font-size: 13px;
+  }
+  .node circle {
+    stroke: #222;
+    stroke-width: 0.6px;
+  }
+  .node text {
+    font-size: 12px;
+    dominant-baseline: middle;
+  }
+  .link {
+    fill: none;
+    stroke: #b6b6b6;
+    stroke-width: 1.2px;
+  }
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(30, 30, 30, 0.92);
+    color: #fff;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.35;
+    max-width: 340px;
+  }
+  .controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin: 10px 0 12px 0;
+    flex-wrap: wrap;
+  }
+  .btn {
+    border: 1px solid #ccc;
+    background: #fff;
+    padding: 7px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .btn:hover {
+    background: #f0f0f0;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="title">Collapsible Tree (horizontal): Meta -&gt; Cluster -&gt; Keyword</div>
+  <div class="subtitle">Meta = share of total | Cluster = share within meta | Keyword = sum of occurrences. Click to expand/collapse.</div>
+
+  <div class="controls">
+    <label style="font-size:13px;color:#333;">
+      Min cluster sum
+      <input id="minClusterSum" type="number" min="0" step="1" style="width:90px;margin-left:6px;">
+    </label>
+    <label style="font-size:13px;color:#333;">
+      Max keywords/cluster
+      <input id="maxKeywords" type="number" min="0" step="1" style="width:90px;margin-left:6px;">
+    </label>
+    <button class="btn" id="applyFilters">Apply</button>
+    <button class="btn" id="resetFilters">Reset</button>
+    <button class="btn" id="expandAll">Expand all</button>
+    <button class="btn" id="collapseAll">Collapse all</button>
+    <span style="font-size:13px;color:#333;">Initial depth: 2</span>
+  </div>
+
+  <div id="chart"></div>
+</div>
+
+<div class="tooltip" id="tooltip" style="opacity:0;"></div>
+
+<script>
+const kwRecords = [{"meta_cluster_name": "development and programming languages", "cluster_name": "abstraction level", "keyword": "design to code", "keyword_sum": 1}, {"meta_cluster_name": "development and programming languages", "cluster_name": "abstraction level", "keyword": "domain-specific language", "keyword_sum": 3}, {"meta_cluster_name": "development and programming languages", "cluster_name": "abstraction level", "keyword": "low-code", "keyword_sum": 71}, {"meta_cluster_name": "development and programming languages", "cluster_name": "abstraction level", "keyword": "no-code", "keyword_sum": 32}, {"meta_cluster_name": "development and programming languages", "cluster_name": "abstraction level", "keyword": "programming by natural language", "keyword_sum": 1}, {"meta_cluster_name": "development and programming languages", "cluster_name": "abstraction level", "keyword": "visual programming", "keyword_sum": 2}, {"meta_cluster_name": "development and programming languages", "cluster_name": "application type", "keyword": "mobile applications", "keyword_sum": 1}, {"meta_cluster_name": "development and programming languages", "cluster_name": "application type", "keyword": "web applications", "keyword_sum": 1}, {"meta_cluster_name": "development and programming languages", "cluster_name": "development approach", "keyword": "vibe coding", "keyword_sum": 1}, {"meta_cluster_name": "development and programming languages", "cluster_name": "development methodology", "keyword": "model-driven engineering", "keyword_sum": 7}, {"meta_cluster_name": "development and programming languages", "cluster_name": "development methodology", "keyword": "prototyping", "keyword_sum": 3}, {"meta_cluster_name": "development and programming languages", "cluster_name": "development methodology", "keyword": "rapid application development", "keyword_sum": 6}, {"meta_cluster_name": "development and programming languages", "cluster_name": "development methodology", "keyword": "traditional development", "keyword_sum": 5}, {"meta_cluster_name": "development and programming languages", "cluster_name": "programming paradigm", "keyword": "paradigm", "keyword_sum": 1}, {"meta_cluster_name": "development and programming languages", "cluster_name": "programming paradigm", "keyword": "programming languages", "keyword_sum": 5}, {"meta_cluster_name": "development and programming languages", "cluster_name": "software development", "keyword": "application development", "keyword_sum": 2}, {"meta_cluster_name": "development and programming languages", "cluster_name": "software development", "keyword": "automated software engineering", "keyword_sum": 1}, {"meta_cluster_name": "development and programming languages", "cluster_name": "software development", "keyword": "automation", "keyword_sum": 1}, {"meta_cluster_name": "development and programming languages", "cluster_name": "software development", "keyword": "devops", "keyword_sum": 2}, {"meta_cluster_name": "development and programming languages", "cluster_name": "software development", "keyword": "digital process automation", "keyword_sum": 1}, {"meta_cluster_name": "development and programming languages", "cluster_name": "software development", "keyword": "maintenance engineering", "keyword_sum": 0}, {"meta_cluster_name": "development and programming languages", "cluster_name": "software development", "keyword": "software development", "keyword_sum": 32}, {"meta_cluster_name": "development and programming languages", "cluster_name": "software development", "keyword": "systems development", "keyword_sum": 1}, {"meta_cluster_name": "development and programming languages", "cluster_name": "software development", "keyword": "testing", "keyword_sum": 2}, {"meta_cluster_name": "education and skills", "cluster_name": "education", "keyword": "clinical education", "keyword_sum": 1}, {"meta_cluster_name": "education and skills", "cluster_name": "education", "keyword": "education", "keyword_sum": 16}, {"meta_cluster_name": "education and skills", "cluster_name": "education", "keyword": "higher education", "keyword_sum": 1}, {"meta_cluster_name": "education and skills", "cluster_name": "learning approaches", "keyword": "authentic learning", "keyword_sum": 1}, {"meta_cluster_name": "education and skills", "cluster_name": "learning approaches", "keyword": "experiential learning", "keyword_sum": 3}, {"meta_cluster_name": "education and skills", "cluster_name": "learning approaches", "keyword": "learning", "keyword_sum": 6}, {"meta_cluster_name": "education and skills", "cluster_name": "learning approaches", "keyword": "metacognitive reflection", "keyword_sum": 2}, {"meta_cluster_name": "education and skills", "cluster_name": "skill demand", "keyword": "new literacy", "keyword_sum": 1}, {"meta_cluster_name": "education and skills", "cluster_name": "skill demand", "keyword": "re- and upskilling", "keyword_sum": 6}, {"meta_cluster_name": "education and skills", "cluster_name": "skill demand", "keyword": "role-specific capabilities", "keyword_sum": 1}, {"meta_cluster_name": "education and skills", "cluster_name": "skill demand", "keyword": "skills", "keyword_sum": 25}, {"meta_cluster_name": "education and skills", "cluster_name": "skill demand", "keyword": "skills shortage", "keyword_sum": 12}, {"meta_cluster_name": "information systems and technologies", "cluster_name": "artificial intelligence", "keyword": "artificial intelligence", "keyword_sum": 20}, {"meta_cluster_name": "information systems and technologies", "cluster_name": "artificial intelligence", "keyword": "large language models", "keyword_sum": 3}, {"meta_cluster_name": "information systems and technologies", "cluster_name": "artificial intelligence", "keyword": "machine learning", "keyword_sum": 3}, {"meta_cluster_name": "information systems and technologies", "cluster_name": "data management", "keyword": "data handling", "keyword_sum": 4}, {"meta_cluster_name": "information systems and technologies", "cluster_name": "information systems", "keyword": "human-computer interaction", "keyword_sum": 1}, {"meta_cluster_name": "information systems and technologies", "cluster_name": "information systems", "keyword": "information systems", "keyword_sum": 11}, {"meta_cluster_name": "information systems and technologies", "cluster_name": "internet of things", "keyword": "iot", "keyword_sum": 3}, {"meta_cluster_name": "organizations and management", "cluster_name": "business unit", "keyword": "business unit development", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "business unit", "keyword": "product line", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "business unit", "keyword": "work system", "keyword_sum": 3}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "agile methodology", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "business process management", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "business process modelling", "keyword_sum": 0}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "change impact analysis", "keyword_sum": 0}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "decision making", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "management", "keyword_sum": 2}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "paradox theory", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "process measurement", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "project management", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "resource demand theory", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "socio-technical theory", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "standardisation", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "task analysis", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "management", "keyword": "workplace transformation", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "organisation", "keyword": "governance", "keyword_sum": 8}, {"meta_cluster_name": "organizations and management", "cluster_name": "organisation", "keyword": "human capital", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "organisation", "keyword": "job crafting", "keyword_sum": 2}, {"meta_cluster_name": "organizations and management", "cluster_name": "organisation", "keyword": "organisation", "keyword_sum": 4}, {"meta_cluster_name": "organizations and management", "cluster_name": "organisation", "keyword": "strategy", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "organizational domains", "keyword": "companies", "keyword_sum": 20}, {"meta_cluster_name": "organizations and management", "cluster_name": "organizational domains", "keyword": "manufacturing", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "organizational domains", "keyword": "medical", "keyword_sum": 1}, {"meta_cluster_name": "organizations and management", "cluster_name": "organizational domains", "keyword": "public administrations", "keyword_sum": 1}, {"meta_cluster_name": "platform characteristics", "cluster_name": "adoption aspects", "keyword": "adoption", "keyword_sum": 8}, {"meta_cluster_name": "platform characteristics", "cluster_name": "adoption aspects", "keyword": "drivers", "keyword_sum": 21}, {"meta_cluster_name": "platform characteristics", "cluster_name": "adoption aspects", "keyword": "integration", "keyword_sum": 5}, {"meta_cluster_name": "platform characteristics", "cluster_name": "adoption aspects", "keyword": "recommendations", "keyword_sum": 5}, {"meta_cluster_name": "platform characteristics", "cluster_name": "architecture", "keyword": "architecture", "keyword_sum": 2}, {"meta_cluster_name": "platform characteristics", "cluster_name": "architecture", "keyword": "connectors", "keyword_sum": 1}, {"meta_cluster_name": "platform characteristics", "cluster_name": "architecture", "keyword": "features", "keyword_sum": 2}, {"meta_cluster_name": "platform characteristics", "cluster_name": "architecture", "keyword": "flexibility", "keyword_sum": 1}, {"meta_cluster_name": "platform characteristics", "cluster_name": "architecture", "keyword": "fundamentals", "keyword_sum": 9}, {"meta_cluster_name": "platform characteristics", "cluster_name": "architecture", "keyword": "platform orchestration", "keyword_sum": 1}, {"meta_cluster_name": "platform characteristics", "cluster_name": "challenges", "keyword": "challenges", "keyword_sum": 31}, {"meta_cluster_name": "platform characteristics", "cluster_name": "challenges", "keyword": "inhibitors", "keyword_sum": 3}, {"meta_cluster_name": "platform characteristics", "cluster_name": "classification perspective", "keyword": "classification", "keyword_sum": 4}, {"meta_cluster_name": "platform characteristics", "cluster_name": "classification perspective", "keyword": "non-platform", "keyword_sum": 1}, {"meta_cluster_name": "platform characteristics", "cluster_name": "classification perspective", "keyword": "taxonomy", "keyword_sum": 3}, {"meta_cluster_name": "platform characteristics", "cluster_name": "core concept", "keyword": "platform", "keyword_sum": 34}, {"meta_cluster_name": "platform characteristics", "cluster_name": "quality", "keyword": "quality", "keyword_sum": 5}, {"meta_cluster_name": "platform characteristics", "cluster_name": "quality", "keyword": "security", "keyword_sum": 5}, {"meta_cluster_name": "platform characteristics", "cluster_name": "quality", "keyword": "usability", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "analytical method", "keyword": "analysis", "keyword_sum": 10}, {"meta_cluster_name": "research and analysis", "cluster_name": "analytical method", "keyword": "case study", "keyword_sum": 5}, {"meta_cluster_name": "research and analysis", "cluster_name": "analytical method", "keyword": "comparative study", "keyword_sum": 0}, {"meta_cluster_name": "research and analysis", "cluster_name": "analytical method", "keyword": "content analysis", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "analytical method", "keyword": "exploratory study", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "analytical method", "keyword": "literature review", "keyword_sum": 2}, {"meta_cluster_name": "research and analysis", "cluster_name": "analytical method", "keyword": "mixed methods", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "analytical method", "keyword": "qualitative analysis", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "analytical method", "keyword": "research", "keyword_sum": 2}, {"meta_cluster_name": "research and analysis", "cluster_name": "analytical method", "keyword": "use case", "keyword_sum": 22}, {"meta_cluster_name": "research and analysis", "cluster_name": "conceptual research", "keyword": "conceptional", "keyword_sum": 36}, {"meta_cluster_name": "research and analysis", "cluster_name": "empirical study type", "keyword": "controlled experiments", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "empirical study type", "keyword": "empirical study", "keyword_sum": 4}, {"meta_cluster_name": "research and analysis", "cluster_name": "empirical study type", "keyword": "evaluation", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "empirical study type", "keyword": "experiment", "keyword_sum": 7}, {"meta_cluster_name": "research and analysis", "cluster_name": "empirical study type", "keyword": "experimental evaluation", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "empirical study type", "keyword": "expert interviews", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "empirical study type", "keyword": "group discussion", "keyword_sum": 2}, {"meta_cluster_name": "research and analysis", "cluster_name": "empirical study type", "keyword": "interviews", "keyword_sum": 9}, {"meta_cluster_name": "research and analysis", "cluster_name": "empirical study type", "keyword": "latent dirichlet allocation", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "empirical study type", "keyword": "quantitative", "keyword_sum": 6}, {"meta_cluster_name": "research and analysis", "cluster_name": "empirical study type", "keyword": "survey", "keyword_sum": 9}, {"meta_cluster_name": "research and analysis", "cluster_name": "modeling approach", "keyword": "descriptive cognitive model", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "modeling approach", "keyword": "metamodeling", "keyword_sum": 2}, {"meta_cluster_name": "research and analysis", "cluster_name": "modeling approach", "keyword": "model", "keyword_sum": 4}, {"meta_cluster_name": "research and analysis", "cluster_name": "research format", "keyword": "hackathon", "keyword_sum": 1}, {"meta_cluster_name": "research and analysis", "cluster_name": "research paradigm", "keyword": "design science research", "keyword_sum": 2}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "actior type", "keyword": "employees", "keyword_sum": 3}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "actior type", "keyword": "stakeholders", "keyword_sum": 1}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "outcome", "keyword": "employee-driven innovation", "keyword_sum": 2}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "outcome", "keyword": "innovations", "keyword_sum": 7}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "principle", "keyword": "democratization", "keyword_sum": 21}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "role", "keyword": "business leaders", "keyword_sum": 1}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "role", "keyword": "citizen developer", "keyword_sum": 34}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "role", "keyword": "digital solution designer", "keyword_sum": 1}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "role", "keyword": "domain expertise", "keyword_sum": 1}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "role", "keyword": "generalists", "keyword_sum": 1}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "role", "keyword": "head of transformation", "keyword_sum": 1}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "role", "keyword": "job roles", "keyword_sum": 7}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "role", "keyword": "solution engineer", "keyword_sum": 1}, {"meta_cluster_name": "stakeholders and employees", "cluster_name": "role", "keyword": "transformation engineers", "keyword_sum": 1}];
+const metaColor = {"development and programming languages": "#1f77b4", "education and skills": "#ff7f0e", "information systems and technologies": "#2ca02c", "organizations and management": "#d62728", "platform characteristics": "#9467bd", "research and analysis": "#8c564b", "stakeholders and employees": "#e377c2"};
+const metaNames = ["development and programming languages", "education and skills", "information systems and technologies", "organizations and management", "platform characteristics", "research and analysis", "stakeholders and employees"];
+const defaultMinClusterKeywordSum = 0;
+const defaultMaxKeywordsPerCluster = 12;
+
+const initialDepth = 2;
+
+// ---- Layout knobs (Abstaende) ----
+const dx = 22;          // vertikaler Abstand zwischen Nodes
+const dy = 260;         // horizontaler Abstand zwischen Ebenen (gross = lesbar)
+const margin = {top: 20, right: 260, bottom: 20, left: 70};
+
+const tooltip = d3.select("#tooltip");
+
+function nodeFill(d) {
+  if (!d.data) return "#999";
+  const c = d.data.color || "#777";
+  if (d.data.type === "root") return "#444";
+  if (d.data.type === "keyword") return c;
+  return c;
+}
+
+function nodeRadius(d) {
+  if (d.data.type === "root") return 6.5;
+  if (d.data.type === "meta") return 6;
+  if (d.data.type === "cluster") return 5.5;
+  return 4.5;
+}
+
+function tooltipHtml(d) {
+  const t = d.data.type;
+  const s = d.data.stats || {};
+  if (t === "meta") {
+    return `<b>${d.data.name}</b><br/>
+      Sum keyword_count: ${s.meta_sum}<br/>
+      Share of total: ${s.meta_pct_total.toFixed(1)}%<br/>
+      Cluster count: ${s.cluster_count}`;
+  }
+  if (t === "cluster") {
+    return `<b>${d.data.name}</b><br/>
+      Sum keyword_count: ${s.cluster_sum}<br/>
+      Share within meta: ${s.cluster_pct_of_meta.toFixed(1)}%`;
+  }
+  if (t === "keyword") {
+    return `<b>${d.data.name}</b><br/>
+      Sum keyword_count: ${s.keyword_sum}`;
+  }
+  return `<b>${d.data.name}</b>`;
+}
+
+function buildHierarchy(minClusterSum, maxKeywordsPerCluster) {
+  const clusterSum = new Map();
+  for (const r of kwRecords) {
+    const key = r.meta_cluster_name + "||" + r.cluster_name;
+    clusterSum.set(key, (clusterSum.get(key) || 0) + (r.keyword_sum || 0));
+  }
+
+  const allowedClusters = new Set();
+  for (const [key, sum] of clusterSum.entries()) {
+    if (sum >= minClusterSum) allowedClusters.add(key);
+  }
+
+  const metaSum = new Map();
+  const metaClusterCount = new Map();
+  for (const key of allowedClusters) {
+    const parts = key.split("||");
+    const m = parts[0];
+    const sum = clusterSum.get(key) || 0;
+    metaSum.set(m, (metaSum.get(m) || 0) + sum);
+    metaClusterCount.set(m, (metaClusterCount.get(m) || 0) + 1);
+  }
+
+  let totalSum = 0;
+  for (const v of metaSum.values()) totalSum += v;
+  if (totalSum <= 0) totalSum = 1;
+
+  const root = {
+    name: "All Keywords (100%)",
+    type: "root",
+    value: totalSum,
+    children: []
+  };
+
+  for (const m of metaNames) {
+    const mSum = metaSum.get(m) || 0;
+    if (mSum <= 0) continue;
+    const mPct = (mSum / totalSum) * 100.0;
+    const mNode = {
+      name: `${m} (${mPct.toFixed(1)}%)`,
+      type: "meta",
+      meta: m,
+      color: metaColor[m] || "#666666",
+      value: mSum,
+      stats: {
+        meta_pct_total: mPct,
+        meta_sum: mSum,
+        cluster_count: metaClusterCount.get(m) || 0,
+      },
+      children: []
+    };
+
+    const clusters = [];
+    for (const [key, sum] of clusterSum.entries()) {
+      const parts = key.split("||");
+      const cm = parts[0];
+      const cc = parts[1];
+      if (cm === m && allowedClusters.has(key)) {
+        clusters.push({ name: cc, sum });
+      }
+    }
+    clusters.sort((a, b) => b.sum - a.sum);
+
+    for (const c of clusters) {
+      const cPct = mSum > 0 ? (c.sum / mSum) * 100.0 : 0;
+      const cNode = {
+        name: `${c.name} (${cPct.toFixed(1)}%)`,
+        type: "cluster",
+        meta: m,
+        color: metaColor[m] || "#666666",
+        value: c.sum,
+        stats: {
+          cluster_pct_of_meta: cPct,
+          cluster_sum: c.sum,
+        },
+        children: []
+      };
+
+      const kws = kwRecords
+        .filter(r => r.meta_cluster_name === m && r.cluster_name === c.name)
+        .sort((a, b) => (b.keyword_sum || 0) - (a.keyword_sum || 0));
+
+      const limit = maxKeywordsPerCluster <= 0 ? kws.length : maxKeywordsPerCluster;
+      for (const row of kws.slice(0, limit)) {
+        const kwSum = parseInt(row.keyword_sum || 0, 10);
+        cNode.children.push({
+          name: `${row.keyword} (Σ ${kwSum})`,
+          type: "keyword",
+          meta: m,
+          color: metaColor[m] || "#666666",
+          value: kwSum,
+          stats: { keyword_sum: kwSum },
+        });
+      }
+
+      mNode.children.push(cNode);
+    }
+
+    root.children.push(mNode);
+  }
+
+  return root;
+}
+
+function collapseToDepth(root, depth) {
+  root.each(d => {
+    if (d.depth >= depth && d.children) {
+      d._children = d.children;
+      d.children = null;
+    }
+  });
+}
+
+function expandAll(root) {
+  root.each(d => {
+    if (d._children) {
+      d.children = d._children;
+      d._children = null;
+    }
+  });
+}
+
+function collapseAll(root) {
+  root.each(d => {
+    if (d.depth >= 1 && d.children) {
+      d._children = d.children;
+      d.children = null;
+    }
+  });
+}
+
+function initRoot(minClusterSum, maxKeywordsPerCluster) {
+  const data = buildHierarchy(minClusterSum, maxKeywordsPerCluster);
+  let root = d3.hierarchy(data);
+  root.x0 = 0;
+  root.y0 = 0;
+  collapseToDepth(root, initialDepth);
+  return root;
+}
+
+let root = initRoot(defaultMinClusterKeywordSum, defaultMaxKeywordsPerCluster);
+
+const tree = d3.tree().nodeSize([dx, dy]);
+
+function render() {
+  tree(root);
+
+  // Compute extents for centering
+  let xMin = Infinity, xMax = -Infinity;
+  root.each(d => {
+    if (d.x < xMin) xMin = d.x;
+    if (d.x > xMax) xMax = d.x;
+  });
+
+  const height = (xMax - xMin) + margin.top + margin.bottom + 80;
+  const width = 1200 + margin.left + margin.right; // breit halten (Keywords lesbar)
+
+  d3.select("#chart").selectAll("*").remove();
+
+  const svg = d3.select("#chart")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+  const g = svg.append("g")
+    .attr("transform", `translate(${margin.left},${margin.top + (-xMin) + 20})`);
+
+  // Links
+  g.append("g")
+    .selectAll("path")
+    .data(root.links())
+    .join("path")
+    .attr("class", "link")
+    .attr("d", d3.linkHorizontal()
+        .x(d => d.y)
+        .y(d => d.x)
+    );
+
+  // Nodes
+  const node = g.append("g")
+    .selectAll("g")
+    .data(root.descendants())
+    .join("g")
+    .attr("class", "node")
+    .attr("transform", d => `translate(${d.y},${d.x})`)
+    .style("cursor", d => (d.children || d._children) ? "pointer" : "default")
+    .on("click", (event, d) => {
+      if (d.children) {
+        d._children = d.children;
+        d.children = null;
+      } else if (d._children) {
+        d.children = d._children;
+        d._children = null;
+      } else {
+        return;
+      }
+      render();
+    })
+    .on("mousemove", (event, d) => {
+      tooltip
+        .style("opacity", 1)
+        .html(tooltipHtml(d))
+        .style("left", (event.pageX + 14) + "px")
+        .style("top", (event.pageY + 14) + "px");
+    })
+    .on("mouseleave", () => {
+      tooltip.style("opacity", 0);
+    });
+
+  node.append("circle")
+    .attr("r", d => nodeRadius(d))
+    .attr("fill", d => nodeFill(d));
+
+  node.append("text")
+    .attr("x", d => (d.children || d._children) ? 10 : 10)
+    .attr("dy", "0.32em")
+    .attr("fill", "#111")
+    .text(d => d.data.name);
+
+  node.filter(d => d._children)
+    .append("text")
+    .attr("x", -10)
+    .attr("dy", "0.32em")
+    .attr("text-anchor", "end")
+    .attr("fill", "#333")
+    .style("font-weight", 700)
+    .text("+");
+}
+
+render();
+
+d3.select("#expandAll").on("click", () => {
+  expandAll(root);
+  render();
+});
+
+d3.select("#collapseAll").on("click", () => {
+  collapseAll(root);
+  render();
+});
+
+const minClusterInput = document.getElementById("minClusterSum");
+const maxKeywordsInput = document.getElementById("maxKeywords");
+minClusterInput.value = defaultMinClusterKeywordSum;
+maxKeywordsInput.value = defaultMaxKeywordsPerCluster;
+
+function applyFilters() {
+  const minClusterSum = parseInt(minClusterInput.value || defaultMinClusterKeywordSum, 10);
+  const maxKeywords = parseInt(maxKeywordsInput.value || defaultMaxKeywordsPerCluster, 10);
+  root = initRoot(isNaN(minClusterSum) ? 0 : minClusterSum, isNaN(maxKeywords) ? 0 : maxKeywords);
+  render();
+}
+
+d3.select("#applyFilters").on("click", applyFilters);
+
+function debounce(fn, waitMs) {
+  let t = null;
+  return (...args) => {
+    if (t) clearTimeout(t);
+    t = setTimeout(() => fn(...args), waitMs);
+  };
+}
+
+const applyFiltersDebounced = debounce(applyFilters, 250);
+minClusterInput.addEventListener("input", applyFiltersDebounced);
+maxKeywordsInput.addEventListener("input", applyFiltersDebounced);
+
+d3.select("#resetFilters").on("click", () => {
+  minClusterInput.value = defaultMinClusterKeywordSum;
+  maxKeywordsInput.value = defaultMaxKeywordsPerCluster;
+  applyFilters();
+});
+</script>
+</body>
+</html>
